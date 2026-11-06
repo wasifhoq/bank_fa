@@ -15,6 +15,7 @@ dfm <- df |>
 nrow(dfm)              
 n_distinct(dfm$bank)
 
+
 winsor <- function(x, p = 0.01) {
   q <- quantile(x, c(p, 1 - p), na.rm = TRUE)
   pmin(pmax(x, q[1]), q[2])
