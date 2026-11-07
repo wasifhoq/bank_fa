@@ -34,3 +34,14 @@
 - Re-declares the panel with pdata.frame() and confirms with pdim(): unbalanced panel, 57 banks, 5 to 13 years each, 670 rows
 - Uses summary() on the _w columns to see typical values: median ROA 0.69, NPL 4.59, CAR 12.80
 - Plots median ROA by year, the ROA histogram, and ROA vs NPL, and saves them in the output folder
+
+### Nov 7, 2026: Explore data script
+- Sources load_inspect.R to get the cleaned data (df)
+- Checks that ROA = net income / total assets x 100, so net income is not used as a predictor
+- Sorts ROA with arrange() to find outliers: Union Bank 2024 (-87.2) and Citizens Bank 2020 (-79.6)
+- Builds the sample: 2013-2025, drops Citizens Bank 2020 (probable data error) -> 670 rows, 57 banks
+- Winsorizes ROA, NPL, CAR, size and LDR at the 1st/99th percentile (new columns end in _w)
+- Declares the panel with pdata.frame(): unbalanced, n = 57, T = 5-13, N = 670
+- Runs summary() and cor() on the _w variables
+- Plots median ROA by year and ROA vs NPL, and saves them in output/
+- Saves the sample to data/dfm_2013_2025.rds for the models script
