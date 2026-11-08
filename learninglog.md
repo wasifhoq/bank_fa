@@ -36,6 +36,16 @@
 - Saves the 2013-2025 sample to data/dfm_2013_2025.rds so the models script loads cleaned data
 - Work is split into three scripts: load_inspect.R, explore_data.R, models.R (next)
 
+### Nov 8, 2026: data_modeling.R
+- Stores one formula in f: ROA explained by NPL, CAR, size and LDR (_w columns)
+- Runs Pooled OLS, Fixed Effects (own intercept per bank) and Random Effects
+- F-test p < 2.2e-16, LM test p < 2.2e-16, Hausman p = 0.0007, so I use fixed effects
+- NPL is negative and significant in all models (FE: -0.044), so more bad loans goes with lower ROA
+- CAR and LDR are significant in pooled but not in FE: they separate profitable banks from others, but changes within a bank don't clearly move its ROA
+- Size is not significant in any model (large standard error in FE)
+- Random effects: 58% of ROA variance is between-bank differences
+- FE R-squared (0.22) is the within R-squared, so it can't be compared with pooled (0.51)
+
 ### Limitations so far
 - Public dataset, not my original thesis data; no GDP or inflation variables (year effects will be used instead)
 - Citizens Bank 2020 was dropped on judgment, not verified against the source

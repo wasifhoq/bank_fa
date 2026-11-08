@@ -1,0 +1,335 @@
+---
+title: "Commercial Bank Financial Performance Analysis (`bank_fa`)"
+subtitle: "Data Ingestion, Inspection, Cleaning & Exploratory Analysis"
+author: "Wasif Hoq"
+date: "`r Sys.Date()`"
+output:
+  github_document:
+    toc: true
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# 1. Project Overview & Research Framework
+
+This study investigates the financial determinants of commercial bank performance, credit risk, solvency, and operational efficiency in Bangladesh using panel econometric techniques.
+
+The analysis is conducted through a structured R pipeline:
+1. **`scripts/load_inspect.R`**: Raw data ingestion, data type formatting, health checks, and initial panel validation.
+2. **`scripts/explore_data.R`**: Outlier detection, sample filtering (2013–2025), 1st/99th percentile winsorization, exploratory visualization, and correlation analysis.
+3. **`scripts/data_modeling.R`**: Econometric panel modeling (Pooled OLS, Fixed Effects, and Random Effects).
+
+---
+
+# 2. Stage 1: Data Loading & Panel Inspection (`load_inspect.R`)
+
+### 2.1 Load Libraries
+
+We load `tidyverse` for data manipulation, piping, and visualization, and `plm` for panel econometrics.
+
+```{r libraries}
+library(tidyverse)
+library(plm)
+```
+
+---
+
+### 2.2 Data Ingestion & Initial Glimpse
+
+Load the processed dataset from Mendeley Data and inspect the column names and initial observations.
+
+```{r load-data}
+raw <- read_csv("data/processed_BD_Banks_features_final.csv")
+glimpse(raw)
+```
+
+- **Observations**: 780 rows across 57 commercial banks.
+- **Reporting Period**: Historical records span 1996 to 2025.
+
+---
+
+### 2.3 Data Type Validity & Transformation
+
+Panel econometrics requires explicit cross-sectional ($i$) and temporal ($t$) indexes. We cast `bank` into a categorical factor and `year` into an integer:
+
+```{r type-conversion}
+# Data type validity check
+df <- raw |>
+  mutate(bank = as.factor(bank),
+         year = as.integer(year))
+```
+
+---
+
+### 2.4 Summary Statistics & Missing Values Audit
+
+Evaluate initial distributions and check whether missing observations occur across key variables.
+
+```{r summary-stats}
+summary(df)
+
+# Check missing values count per variable
+colSums(is.na(df))
+```
+
+---
+
+### 2.5 Cross-Sectional and Time Series Representation
+
+We examine the number of observations available per commercial bank and the coverage per fiscal year:
+
+```{r distributions}
+# Annual counts per commercial bank (first 15 shown)
+df |> count(bank) |> print(n = 15)
+
+# Number of reporting banks per fiscal year
+df |> count(year) |> print(n = 30)
+```
+
+*Observation*: Pre-2013 records feature fewer reporting institutions. From 2013 onwards, reporting is dense and consistent across the banking sector.
+
+---
+
+### 2.6 Panel Uniqueness Verification
+
+Verify that each bank appears at most once per fiscal year:
+
+```{r duplicates}
+sum(duplicated(df[c("bank", "year")]))
+```
+
+The count of `0` confirms the dataset satisfies the strict panel requirement of unique $(i, t)$ tuples.
+
+---
+
+### 2.7 Initial Panel Structure Declaration
+
+Declare the panel dataframe index using `plm::pdata.frame`:
+
+```{r panel-declaration}
+pdata <- pdata.frame(df, index = c("bank", "year"))
+pdim(pdata)
+```
+
+- **Panel Type**: Unbalanced panel (entities enter at varying dates).
+- **$n$ (Banks)**: 57
+- **$T$ (Years per bank)**: 5 to 29 years
+- **$N$ (Total observations)**: 780
+
+---
+
+# 3. Stage 2: Exploratory Data Analysis & Sample Preparation (`explore_data.R`)
+
+### 3.1 Accounting Identity Verification
+
+Before running predictive regressions, we confirm accounting relationships. Return on Assets (ROA) is defined as:
+
+$$\text{ROA} = \frac{\text{Net Income}}{\text{Total Assets}} \times 100$$
+
+```{r sanity-check}
+df |>
+  mutate(check = net_income / total_assets * 100) |>
+  select(bank, year, roa, check) |>
+  head(10)
+```
+
+Because `net_income` directly calculates `roa`, including `net_income` as an explanatory variable in an ROA model would create severe endogeneity and tautological bias.
+
+---
+
+### 3.2 Outlier Detection & Assessment
+
+Sorting by `roa` reveals severe negative values:
+
+```{r outlier-inspection}
+df |>
+  arrange(roa) |>
+  select(bank, year, roa, total_assets, equity, net_income) |>
+  head(10)
+```
+
+**Key Findings:**
+1. **Citizens Bank PLC (2020)**: Reported an extreme ROA of -79.6% on reported total assets of only 25.5 BDT million. This asset base is disproportionately tiny compared to standard commercial banks, pointing to an unverified reporting artifact or restructuring distortion.
+2. **Union Bank PLC (2024)**: Reported an ROA of -87.2%, but on normal-scale total assets (reflecting a verified, massive sector shock/loss).
+
+**Handling Strategy:**
+- Drop **Citizens Bank PLC (2020)** due to unverified scale distortion.
+- Retain **Union Bank PLC (2024)** to preserve real distress dynamics, treating extreme values via statistical winsorization.
+
+---
+
+### 3.3 Sample Window Restriction (2013–2025)
+
+We restrict the research sample to the 2013–2025 period to ensure high reporting density across all 57 institutions:
+
+```{r sample-filtering}
+dfm <- df |>
+  filter(year >= 2013) |>
+  filter(!(bank == "Citizens Bank PLC" & year == 2020))
+
+# Sample dimensions after filtering
+nrow(dfm)
+n_distinct(dfm$bank)
+```
+
+- **Sample Size ($N$)**: 670 bank-year observations.
+- **Institutions ($n$)**: 57 banks.
+
+---
+
+### 3.4 Winsorization (1st and 99th Percentiles)
+
+To prevent regression coefficients from being distorted by extreme tail values while preserving all observations, financial ratios are winsorized at the 1st and 99th percentiles:
+
+```{r winsorization}
+winsor <- function(x, p = 0.01) {
+  q <- quantile(x, c(p, 1 - p), na.rm = TRUE)
+  pmin(pmax(x, q[1]), q[2])
+}
+
+dfm <- dfm |>
+  mutate(across(c(roa, npl_ratio_pct, car_crar_pct, size_ln_assets, ldr),
+                winsor, .names = "{.col}_w"))
+
+# Comparison of original vs. winsorized distributions
+summary(dfm[c("roa", "roa_w", "ldr", "ldr_w")])
+```
+
+---
+
+### 3.5 Final Cleaned Panel Declaration
+
+Re-declaring the panel structure on the cleaned 2013–2025 sample:
+
+```{r panel-re-declaration}
+pdatam <- pdata.frame(dfm, index = c("bank", "year"))
+pdim(pdatam)
+```
+
+- **Cleaned Sample**: Unbalanced panel with 57 banks, 5 to 13 years each ($N = 670$).
+
+---
+
+### 3.6 Summary Statistics of Modeling Variables
+
+```{r summary-winsorized}
+dfm |>
+  select(roa_w, npl_ratio_pct_w, car_crar_pct_w, size_ln_assets_w, ldr_w) |>
+  summary()
+```
+
+- **Median ROA (`roa_w`)**: 0.69%
+- **Median Non-Performing Loan Ratio (`npl_ratio_pct_w`)**: 4.59%
+- **Median Capital Adequacy Ratio (`car_crar_pct_w`)**: 12.80%
+
+---
+
+### 3.7 Visualizing Key Empirical Relationships
+
+#### A. Median ROA Evolution (2013–2025)
+
+```{r plot-median-roa, fig.width=7, fig.height=4}
+dfm |>
+  group_by(year) |>
+  summarise(median_roa = median(roa_w), n_banks = n()) |>
+  ggplot(aes(year, median_roa)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  geom_point(aes(size = n_banks)) +
+  labs(title = "Median ROA by Year (2013–2025)",
+       x = "Fiscal Year", y = "Median ROA (%)", size = "Reporting Banks") +
+  theme_minimal()
+
+# Save figure to output directory
+ggsave("output/median_roa_by_year.png", width = 7, height = 4)
+```
+
+#### B. Distribution of Winsorized ROA
+
+```{r plot-roa-hist, fig.width=6, fig.height=4}
+ggplot(dfm, aes(roa_w)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "white") +
+  labs(title = "Distribution of Winsorized ROA", x = "ROA (%)", y = "Count") +
+  theme_minimal()
+```
+
+#### C. Profitability vs. Credit Risk (`ROA` vs. `NPL`)
+
+```{r plot-roa-vs-npl, fig.width=6, fig.height=4}
+ggplot(dfm, aes(npl_ratio_pct_w, roa_w)) +
+  geom_point(alpha = 0.5, color = "darkblue") +
+  geom_smooth(method = "lm", color = "red", se = TRUE) +
+  labs(title = "Profitability (ROA) vs Credit Risk (NPL Ratio)",
+       x = "Non-Performing Loan Ratio (%)", y = "ROA (%)") +
+  theme_minimal()
+
+# Save figure to output directory
+ggsave("output/roa_vs_npl.png", width = 6, height = 4)
+```
+
+---
+
+### 3.8 Cross-Sectional Institution Ranking
+
+Ranking banks by mean profitability (`roa_w`) alongside credit risk (`npl_ratio_pct_w`):
+
+```{r bank-ranking}
+dfm |>
+  group_by(bank) |>
+  summarise(avg_roa = mean(roa_w),
+            avg_npl = mean(npl_ratio_pct_w),
+            years   = n()) |>
+  arrange(desc(avg_roa)) |>
+  print(n = 20) # Top 20 banks displayed
+```
+
+---
+
+### 3.9 Correlation Matrix & Multicollinearity Diagnostics
+
+```{r correlation-matrix}
+dfm |>
+  select(roa_w, npl_ratio_pct_w, car_crar_pct_w, size_ln_assets_w, ldr_w) |>
+  cor() |>
+  round(2)
+```
+
+- **ROA vs. NPL**: Negative correlation confirming credit risk dampens profitability.
+- **Multicollinearity Check**: Pairwise correlations among explanatory variables (`npl_ratio_pct_w`, `car_crar_pct_w`, `size_ln_assets_w`, `ldr_w`) remain well below standard concern thresholds ($|r| < 0.70$).
+
+---
+
+### 3.10 Export Cleaned Modeling Sample
+
+The cleaned and winsorized 2013–2025 dataset is saved for the modeling scripts:
+
+```{r export-rds}
+write_rds(dfm, "data/dfm_2013_2025.rds")
+```
+
+---
+
+# 4. Variable Reference Guide
+
+| Variable | Raw Name | Winsorized Name | Economic Interpretation |
+| :--- | :--- | :--- | :--- |
+| **Return on Assets** | `roa` | `roa_w` | Dependent variable: Bank operating profitability |
+| **Non-Performing Loans** | `npl_ratio_pct` | `npl_ratio_pct_w` | Core explanatory: Credit risk & asset impairment |
+| **Capital Adequacy** | `car_crar_pct` | `car_crar_pct_w` | Regulatory solvency buffer & capital strength |
+| **Bank Size** | `size_ln_assets` | `size_ln_assets_w` | Control variable: Natural log of total assets |
+| **Loan-to-Deposit Ratio**| `ldr` | `ldr_w` | Liquidity management & funding deployment |
+
+---
+
+# 5. Transition to Econometric Modeling
+
+With sample preparation and diagnostics complete, the pipeline transitions to [`scripts/data_modeling.R`](scripts/data_modeling.R):
+* **Pooled OLS**: Baseline cross-sectional and time-pooled estimation.
+* **Fixed Effects (Within)**: Controls for unobserved bank-specific heterogeneity ($\alpha_i$).
+* **Random Effects**: Models bank-level differences as random shocks ($\mu_i$).
+* **Statistical Diagnostics**:
+  * **$F$-test / Chow Test**: Tests poolability ($H_0$: pooled OLS is sufficient).
+  * **Breusch-Pagan LM Test**: Tests for random individual effects.
+  * **Hausman Specification Test**: Determines whether Fixed Effects is required over Random Effects.
