@@ -74,24 +74,3 @@ I followed a step-by-step panel modeling approach:
 3. **Capital as a Safety Net, Not a Profit Engine**: Maintaining high CAR is essential for solvency and regulatory compliance, but bank managers shouldn't expect capital injections alone to immediately turn around an unprofitable bank without fixing bad loan recovery.
 
 ---
-
-## 7. Project Structure
-
-```
-bank_fa/
-├── data/
-│   ├── processed_BD_Banks_features_final.csv   # Raw Mendeley panel data (780 rows)
-│   └── dfm_2013_2025.rds                       # Cleaned, winsorized panel (670 rows)
-├── scripts/
-│   ├── load_inspect.R                          # Ingestion & health checks
-│   ├── explore_data.R                          # Cleaning, winsorizing & plots
-│   └── data_modeling.R                         # Econometric models & diagnostics
-├── output/
-│   ├── median_roa_by_year.png                  # Plot of sector median ROA over time
-│   └── roa_vs_npl.png                          # Scatterplot: ROA vs NPL
-├── analysis.Rmd                                # Complete pipeline & report
-├── analysis.md                                 # Rendered markdown report
-├── learninglog.md                              # Dated progress log & self-critique
-├── Guide.md                                    # Super simple 8-year-old guide to the project
-└── README.md                                   # Project summary & findings
-```
