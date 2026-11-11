@@ -1,4 +1,4 @@
-Commercial Bank Financial Performance in Bangladesh (`bank_fa`)
+Commercial Bank Financial Performance in Bangladesh
 ================
 Wasif Hoq
 2026-11-11

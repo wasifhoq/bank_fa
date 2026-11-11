@@ -1,5 +1,5 @@
 ---
-title: "Commercial Bank Financial Performance in Bangladesh (`bank_fa`)"
+title: "Commercial Bank Financial Performance in Bangladesh"
 subtitle: "Econometric Panel Data Analysis: Inspection, Cleaning, Modeling & Diagnostics"
 author: "Wasif Hoq"
 date: "`r Sys.Date()`"
