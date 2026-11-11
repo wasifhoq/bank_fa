@@ -1,4 +1,4 @@
-# Commercial Bank Financial Performance in Bangladesh: Panel Data Analysis (`bank_fa`)
+# Commercial Bank Financial Performance in Bangladesh: Panel Data Analysis 
 
 This project is an econometric panel data study of commercial banks in Bangladesh, built in R using `tidyverse`, `plm`, `sandwich`, `lmtest`, and `car`. 
 
@@ -92,5 +92,6 @@ bank_fa/
 ├── analysis.Rmd                                # Complete pipeline & report
 ├── analysis.md                                 # Rendered markdown report
 ├── learninglog.md                              # Dated progress log & self-critique
+├── Guide.md                                    # Super simple 8-year-old guide to the project
 └── README.md                                   # Project summary & findings
 ```

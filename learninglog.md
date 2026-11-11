@@ -46,13 +46,20 @@
 - Random effects: 58% of ROA variance is between-bank differences
 - FE R-squared (0.22) is the within R-squared, so it can't be compared with pooled (0.51)
 
-### Limitations so far
-- Public dataset, not my original thesis data; no GDP or inflation variables (year effects will be used instead)
-- Citizens Bank 2020 was dropped on judgment, not verified against the source
-- ldr_w and car_crar_pct_w are still very wide after winsorizing
-- Some values look copied between banks (Krishi Bank and Rajshahi Krishi Unnayan Bank have identical CAR values in 2015-2019)
-- Plan: rerun the model without Union Bank 2024 as a robustness check
-
-### Next
-- models.R: pooled OLS, fixed effects, random effects, F-test, LM test, Hausman test
+### Nov 11, 2026: Step 4: diagnostics
+- Loaded plm, car, lmtest and sandwich (the first errors happened because plm was not loaded in the session)
+- Breusch-Pagan p < 2.2e-16: unequal variance
+- Breusch-Godfrey/Wooldridge p = 2.8e-12: serial correlation within banks
+- Because of both, I report FE with cluster-robust standard errors (clustered by bank)
+- NPL stays significant: estimate -0.0443, robust SE 0.0105 (was 0.0036), p = 0.00003
+- CAR, size and LDR are not significant in FE, before or after the correction
+- Lesson: coefficients stay the same when standard errors are corrected; only SEs and p-values change
+- Limits: 57 clusters is approximate; association, not cause; not yet tested without Union Bank 2024 or with year effects
 - Then diagnostics (VIF, heteroskedasticity, autocorrelation) and the Quarto report
+
+### What I'd Improve Next (Honest Self-Critique)
+- **Dynamic Panel / System GMM**: In banking, past profits usually drive current profits (`lag(roa)`). Also, bad loans reduce profits, but low profits also make it harder for banks to recover loans (two-way causality). A static fixed-effects model can't fix that endogeneity, but a System GMM model (Arellano-Bover / Blundell-Bond) would.
+- **Sensitivity test without Union Bank 2024**: Union Bank had an extreme loss in 2024 (ROA -87.2%). Even though winsorizing pulled it back to -5.78%, I should re-run the regression completely dropping Union Bank to verify that one failing bank isn't exaggerating the NPL coefficient.
+- **External Macro Variables**: This Mendeley dataset only has balance sheet ratios. In reality, bank profits in Bangladesh are heavily hit by inflation, Bangladesh Bank interest rate caps (like the 9% lending cap), and GDP slowdowns. Merging World Bank or Bangladesh Bank data would be much more realistic than just using year dummies.
+- **Separating Islamic vs Conventional banks**: Shariah-compliant banks in Bangladesh have different profit-loss sharing modes and deposit structures. Putting them all in the same bucket might hide different risk dynamics.
+- **Cluster sample size caution**: 57 banks is okay for clustering, but since the panel is unbalanced (some banks only have 5 years), the asymptotic guarantees of cluster-robust standard errors might be slightly stretched.
